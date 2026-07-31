@@ -1,0 +1,49 @@
+name: Auto-create PR
+
+on:
+  push:
+    branches:
+      - 'feature/module-5-notifications'
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create PR if missing
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const head = `${owner}:feature/module-5-notifications`;
+            const base = 'main';
+            const title = 'feat(module-5): notificaciones, CI y entorno dev (Celery/Docker)';
+            const body = `Resumen
+- Añade Módulo 5: notificaciones in‑app y preferencias por usuario.
+- Endpoint interno POST /notifications/internal/run-reminders para generar recordatorios de plazos.
+- Servicio NotificationService con creación de notificaciones, entrega (stub de email) y generación de recordatorios para Deadlines.
+- Modelos y migración Alembic: notifications, notification_preferences.
+- API: endpoints para listar notificaciones, marcar como leídas y gestionar preferencias.
+- Infra y dev: CI, Docker/Compose, Celery/task y workflow programado para run-reminders.
+
+Checklist (antes de merge)
+- [ ] Ejecutar pytest en CI y corregir fallos si los hubiera.
+- [ ] Revisar migración Alembic y confirmar compatibilidad con la DB de producción.
+- [ ] Decidir estrategia de envío de email (stub vs SMTP/SendGrid/SES).
+- [ ] Configurar secrets RUN_REMINDERS_URL / RUN_REMINDERS_TOKEN si se usa Actions scheduler.
+`;
+
+            // Check for existing open PR with this head
+            const existing = await github.rest.pulls.list({ owner, repo, head, state: 'open' });
+            if (existing.data && existing.data.length > 0) {
+              console.log('Existing PR found: ' + existing.data[0].html_url);
+              core.setOutput('pr_url', existing.data[0].html_url);
+              return;
+            }
+
+            const pr = await github.rest.pulls.create({ owner, repo, title, head: 'feature/module-5-notifications', base, body });
+            console.log('Created PR: ' + pr.data.html_url);
+            core.setOutput('pr_url', pr.data.html_url);
