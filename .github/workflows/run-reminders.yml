@@ -1,0 +1,39 @@
+name: Run reminders (scheduled)
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # every day at 08:00 UTC
+  workflow_dispatch:
+
+jobs:
+  run-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run reminders endpoint
+        env:
+          URL: ${{ secrets.RUN_REMINDERS_URL }}
+          TOKEN: ${{ secrets.RUN_REMINDERS_TOKEN }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$TOKEN" ]; then
+            echo "RUN_REMINDERS_URL or RUN_REMINDERS_TOKEN not set in secrets"
+            exit 1
+          fi
+
+          n=0
+          until [ $n -ge 3 ]
+          do
+            echo "Attempt $(($n + 1))"
+            status=$(curl -s -o /dev/stderr -w "%{http_code}" -X POST "$URL" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json") || true
+            echo "HTTP status: $status"
+            if [ "$status" = "200" ]; then
+              echo "Reminders executed"
+              exit 0
+            fi
+            n=$((n+1))
+            sleep $((n*5))
+          done
+          echo "Reminders failed after 3 attempts"
+          exit 1

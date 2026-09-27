@@ -1,0 +1,46 @@
+name: Auto-create PR
+
+# Ensure workflow has permission to create pull requests
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  push:
+    branches:
+      - 'feature/module-5-notifications'
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create PR if missing (safe)
+        uses: actions/github-script@v6
+        with:
+          script: |
+            try {
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              const head = `${owner}:feature/module-5-notifications`;
+              const base = 'main';
+              const title = 'feat(module-5): notificaciones, CI y entorno dev (Celery/Docker)';
+              const body = `Resumen\n- Añade Módulo 5: notificaciones in‑app y preferencias por usuario.\n- Endpoint interno POST /notifications/internal/run-reminders para generar recordatorios de plazos.\n- Servicio NotificationService con creación de notificaciones, entrega (stub de email) y generación de recordatorios para Deadlines.\n- Modelos y migración Alembic: notifications, notification_preferences.\n- API: endpoints para listar notificaciones, marcar como leídas y gestionar preferencias.\n- Infra y dev: CI, Docker/Compose, Celery/task y workflow programado para run-reminders.\n\nChecklist (antes de merge)\n- [ ] Ejecutar pytest en CI y corregir fallos si los hubiera.\n- [ ] Revisar migración Alembic y confirmar compatibilidad con la DB de producción.\n- [ ] Decidir estrategia de envío de email (stub vs SMTP/SendGrid/SES).\n- [ ] Configurar secrets RUN_REMINDERS_URL / RUN_REMINDERS_TOKEN si se usa Actions scheduler.\n`;
+
+              console.log(`Checking for existing PR from ${head} into ${base}`);
+              const existing = await github.rest.pulls.list({ owner, repo, head, state: 'open' });
+              if (existing.data && existing.data.length > 0) {
+                console.log('Existing PR found: ' + existing.data[0].html_url);
+                return;
+              }
+
+              console.log('No existing PR found — creating one now');
+              const pr = await github.rest.pulls.create({ owner, repo, title, head: 'feature/module-5-notifications', base, body });
+              console.log('Created PR: ' + pr.data.html_url);
+            } catch (err) {
+              console.error('Error creating PR:', err);
+              core && core.setFailed && core.setFailed(err.message || String(err));
+              throw err;
+            }
